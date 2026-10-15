@@ -39,11 +39,12 @@ func linkLine(places int) float64 {
 // at the scale the photo's size gives, over every crop that scale leaves
 // room for. Every way round, because a crop four by five tall comes out
 // of a photo taken wide as easily as out of one taken tall.
-func (f *fingerprint) find(p *picture) finding {
+func (f *fingerprint) find(p *evidence) finding {
 	best := finding{pce: math.Inf(-1)}
 	places := 0
-	q, ox, oy := p.centred()
-	signal := weighted(q)
+	// Ways round that need the same frame share the photo's transform.
+	spectra := map[[2]int][]complex128{}
+	q, ox, oy, signal := p.part, p.ox, p.oy, p.signal
 	for turns := 0; turns < 4; turns++ {
 		kw, kh := f.w, f.h
 		if turns%2 == 1 {
@@ -69,7 +70,11 @@ func (f *fingerprint) find(p *picture) finding {
 		x0, x1 := ox-slack, ox+sw-p.w+slack
 		y0, y1 := oy-slack, oy+sh-p.h+slack
 		fw, fh := smoothUp(sw+slack), smoothUp(sh+slack)
-		c := correlate(padded(signal, q.w, q.h, fw, fh), padded(k, sw, sh, fw, fh), fw, fh)
+		frame := [2]int{fw, fh}
+		if spectra[frame] == nil {
+			spectra[frame] = spectrum(padded(signal, q.w, q.h, fw, fh), fw, fh)
+		}
+		c := crossSpectra(spectra[frame], spectrum(padded(k, sw, sh, fw, fh), fw, fh), fw, fh)
 		v, px, py := pce(c, fw, fh, x0, x1, y0, y1)
 		places += (x1 - x0 + 1) * (y1 - y0 + 1)
 		if v > best.pce {
@@ -78,6 +83,24 @@ func (f *fingerprint) find(p *picture) finding {
 	}
 	best.threshold = linkLine(places)
 	return best
+}
+
+// evidence is a photo made ready to be compared with fingerprints: the
+// middle of it, cropped to a size the transform is quick on, and its noise
+// times its light. Making it is the slow part, so it is made once however
+// many fingerprints it meets.
+type evidence struct {
+	w, h   int
+	part   struct{ w, h int }
+	ox, oy int
+	signal []float32
+}
+
+func prepare(p *picture) *evidence {
+	q, ox, oy := p.centred()
+	e := &evidence{w: p.w, h: p.h, ox: ox, oy: oy, signal: weighted(q)}
+	e.part.w, e.part.h = q.w, q.h
+	return e
 }
 
 // turned is a plane given the number of quarter turns clockwise.

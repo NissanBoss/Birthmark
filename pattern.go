@@ -47,6 +47,17 @@ func (e *estimator) add(p *picture) {
 	e.photos++
 }
 
+// merge adds another estimator's photos to this one's.
+func (e *estimator) merge(o *estimator) {
+	for c := range e.sum {
+		for i := range e.sum[c] {
+			e.sum[c][i] += o.sum[c][i]
+			e.weight[c][i] += o.weight[c][i]
+		}
+	}
+	e.photos += o.photos
+}
+
 func (e *estimator) fingerprint() *fingerprint {
 	var planes [3][]float32
 	for c := range planes {
@@ -215,13 +226,19 @@ func (f *fingerprint) match(p *picture) float64 {
 // correlate is the circular cross-correlation of a with b: for every
 // shift s, the sum over x of a[x] times b[x+s].
 func correlate(a, b []float32, w, h int) []float64 {
-	fa, fb := spectrum(a, w, h), spectrum(b, w, h)
+	return crossSpectra(spectrum(a, w, h), spectrum(b, w, h), w, h)
+}
+
+// crossSpectra is correlate for planes already transformed. It leaves both
+// as they were, so a photo's transform can meet more than one pattern.
+func crossSpectra(fa, fb []complex128, w, h int) []float64 {
+	prod := make([]complex128, len(fa))
 	for i := range fa {
-		fa[i] = cmplx.Conj(fa[i]) * fb[i]
+		prod[i] = cmplx.Conj(fa[i]) * fb[i]
 	}
-	fft2(fa, w, h, true)
+	fft2(prod, w, h, true)
 	out := make([]float64, w*h)
-	for i, v := range fa {
+	for i, v := range prod {
 		out[i] = real(v)
 	}
 	return out

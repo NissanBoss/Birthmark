@@ -57,11 +57,11 @@ func TestTheSensorIsFoundAfterTheAppsHaveHadThePhoto(t *testing.T) {
 		{"shrunk to three quarters", func(p *picture) *picture { return shared(p, 240, 180, 85) }},
 		{"cropped to four by five", func(p *picture) *picture { return shared(p.crop(64, 0, 192, 240), 176, 220, 85) }},
 	} {
-		v := k.find(c.app(fakePhoto(rng, mine, w, h, 92)))
+		v := k.find(prepare(c.app(fakePhoto(rng, mine, w, h, 92))))
 		if !v.linked() {
 			t.Errorf("%s: the sensor's own photo scored %.1f, under the line at %.1f", c.name, v.pce, v.threshold)
 		}
-		if v := k.find(c.app(fakePhoto(rng, theirs, w, h, 92))); v.linked() {
+		if v := k.find(prepare(c.app(fakePhoto(rng, theirs, w, h, 92)))); v.linked() {
 			t.Errorf("%s: another sensor's photo scored %.1f, over the line at %.1f", c.name, v.pce, v.threshold)
 		}
 	}
