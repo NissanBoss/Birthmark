@@ -16,25 +16,25 @@ import (
 func TestFourierAgreesWithItsDefinition(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	for _, n := range []int{1, 2, 3, 4, 5, 6, 7, 8, 12, 30, 49, 60, 81} {
-		in := make([]complex128, n)
+		in := make([]complex64, n)
 		for i := range in {
-			in[i] = complex(rng.NormFloat64(), rng.NormFloat64())
+			in[i] = complex(float32(rng.NormFloat64()), float32(rng.NormFloat64()))
 		}
-		got := make([]complex128, n)
+		got := make([]complex64, n)
 		newFFT(n, false).transform(got, in, 1)
 		for k := 0; k < n; k++ {
 			var want complex128
 			for j := 0; j < n; j++ {
-				want += in[j] * cmplx.Rect(1, -2*math.Pi*float64(j*k)/float64(n))
+				want += complex128(in[j]) * cmplx.Rect(1, -2*math.Pi*float64(j*k)/float64(n))
 			}
-			if cmplx.Abs(got[k]-want) > 1e-9*float64(n) {
+			if cmplx.Abs(complex128(got[k])-want) > 1e-5*float64(n) {
 				t.Fatalf("n=%d: bin %d is %v, want %v", n, k, got[k], want)
 			}
 		}
-		back := make([]complex128, n)
+		back := make([]complex64, n)
 		newFFT(n, true).transform(back, got, 1)
 		for j := range back {
-			if cmplx.Abs(back[j]/complex(float64(n), 0)-in[j]) > 1e-9 {
+			if cmplx.Abs(complex128(back[j]/complex(float32(n), 0)-in[j])) > 1e-5 {
 				t.Fatalf("n=%d: the inverse did not come back", n)
 			}
 		}

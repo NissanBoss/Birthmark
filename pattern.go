@@ -4,7 +4,6 @@ package main
 
 import (
 	"math"
-	"math/cmplx"
 )
 
 // fingerprint is a sensor's pattern, estimated from photos it took, all
@@ -157,16 +156,16 @@ func zeroMean(plane []float32, w, h int) {
 // stands up as peaks. The same shrinking the denoiser does brings the
 // peaks down to the level around them.
 func wienerDFT(plane []float32, w, h int, sigma float64) []float32 {
-	f := make([]complex128, w*h)
+	f := make([]complex64, w*h)
 	for i, v := range plane {
-		f[i] = complex(float64(v), 0)
+		f[i] = complex(v, 0)
 	}
 	fft2(f, w, h, false)
 	scale := math.Sqrt(float64(w * h))
 	size := make([]float64, w*h)
 	for i, v := range f {
 		// The real part only, as the reference has it.
-		size[i] = math.Abs(real(v) / scale)
+		size[i] = math.Abs(float64(real(v)) / scale)
 	}
 	shrunk := append([]float64(nil), size...)
 	shrinkToNoise(shrunk, w, h, sigma*sigma)
@@ -175,12 +174,12 @@ func wienerDFT(plane []float32, w, h int, sigma float64) []float32 {
 			f[i] = 0
 			continue
 		}
-		f[i] *= complex(shrunk[i]/size[i], 0)
+		f[i] *= complex(float32(shrunk[i]/size[i]), 0)
 	}
 	fft2(f, w, h, true)
 	out := make([]float32, w*h)
 	for i, v := range f {
-		out[i] = float32(real(v) / float64(w*h))
+		out[i] = real(v) / float32(w*h)
 	}
 	return out
 }
@@ -225,34 +224,34 @@ func (f *fingerprint) match(p *picture) float64 {
 
 // correlate is the circular cross-correlation of a with b: for every
 // shift s, the sum over x of a[x] times b[x+s].
-func correlate(a, b []float32, w, h int) []float64 {
+func correlate(a, b []float32, w, h int) []float32 {
 	return crossSpectra(spectrum(a, w, h), spectrum(b, w, h), w, h)
 }
 
 // crossSpectra is correlate for planes already transformed. It leaves both
 // as they were, so a photo's transform can meet more than one pattern.
-func crossSpectra(fa, fb []complex128, w, h int) []float64 {
-	prod := make([]complex128, len(fa))
+func crossSpectra(fa, fb []complex64, w, h int) []float32 {
+	prod := make([]complex64, len(fa))
 	for i := range fa {
-		prod[i] = cmplx.Conj(fa[i]) * fb[i]
+		prod[i] = complex(real(fa[i]), -imag(fa[i])) * fb[i]
 	}
 	fft2(prod, w, h, true)
-	out := make([]float64, w*h)
+	out := make([]float32, w*h)
 	for i, v := range prod {
 		out[i] = real(v)
 	}
 	return out
 }
 
-func spectrum(a []float32, w, h int) []complex128 {
+func spectrum(a []float32, w, h int) []complex64 {
 	var mean float64
 	for _, v := range a {
 		mean += float64(v)
 	}
 	mean /= float64(len(a))
-	f := make([]complex128, w*h)
+	f := make([]complex64, w*h)
 	for i, v := range a {
-		f[i] = complex(float64(v)-mean, 0)
+		f[i] = complex(float32(float64(v)-mean), 0)
 	}
 	fft2(f, w, h, false)
 	return f
@@ -267,12 +266,12 @@ func spectrum(a []float32, w, h int) []complex128 {
 // Above 60 the photo is the sensor's: at that line Goljan, Fridrich and
 // Filler measured about two false alarms in a hundred thousand, on a
 // million photos from Flickr.
-func pce(c []float64, w, h, x0, x1, y0, y1 int) (value float64, px, py int) {
+func pce(c []float32, w, h, x0, x1, y0, y1 int) (value float64, px, py int) {
 	best := math.Inf(-1)
 	for dy := y0; dy <= y1; dy++ {
 		for dx := x0; dx <= x1; dx++ {
 			x, y := (dx%w+w)%w, (dy%h+h)%h
-			if v := c[y*w+x]; v > best {
+			if v := float64(c[y*w+x]); v > best {
 				best, px, py = v, x, y
 			}
 		}
@@ -286,7 +285,7 @@ func pce(c []float64, w, h, x0, x1, y0, y1 int) (value float64, px, py int) {
 			if ddx <= near && ddy <= near {
 				continue
 			}
-			energy += c[y*w+x] * c[y*w+x]
+			energy += float64(c[y*w+x]) * float64(c[y*w+x])
 			n++
 		}
 	}

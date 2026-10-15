@@ -43,7 +43,7 @@ func (f *fingerprint) find(p *evidence) finding {
 	best := finding{pce: math.Inf(-1)}
 	places := 0
 	// Ways round that need the same frame share the photo's transform.
-	spectra := map[[2]int][]complex128{}
+	spectra := map[[2]int][]complex64{}
 	q, ox, oy, signal := p.part, p.ox, p.oy, p.signal
 	for turns := 0; turns < 4; turns++ {
 		kw, kh := f.w, f.h

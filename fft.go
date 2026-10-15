@@ -18,18 +18,18 @@ import (
 type fftPlan struct {
 	n       int
 	factors []int // radix, then the length that remains, in pairs
-	twiddle []complex128
-	scratch []complex128
+	twiddle []complex64
+	scratch []complex64
 }
 
 func newFFT(n int, inverse bool) *fftPlan {
-	p := &fftPlan{n: n, twiddle: make([]complex128, n)}
+	p := &fftPlan{n: n, twiddle: make([]complex64, n)}
 	sign := -1.0
 	if inverse {
 		sign = 1
 	}
 	for i := range p.twiddle {
-		p.twiddle[i] = cmplx.Rect(1, sign*2*math.Pi*float64(i)/float64(n))
+		p.twiddle[i] = complex64(cmplx.Rect(1, sign*2*math.Pi*float64(i)/float64(n)))
 	}
 	m := n
 	for m > 1 {
@@ -40,14 +40,14 @@ func newFFT(n int, inverse bool) *fftPlan {
 		m /= f
 		p.factors = append(p.factors, f, m)
 		if f > len(p.scratch) {
-			p.scratch = make([]complex128, f)
+			p.scratch = make([]complex64, f)
 		}
 	}
 	return p
 }
 
 // transform writes the transform of in, read every stride places, to out.
-func (p *fftPlan) transform(out, in []complex128, stride int) {
+func (p *fftPlan) transform(out, in []complex64, stride int) {
 	if p.n == 1 {
 		out[0] = in[0]
 		return
@@ -55,7 +55,7 @@ func (p *fftPlan) transform(out, in []complex128, stride int) {
 	p.work(out, in, 1, stride, p.factors)
 }
 
-func (p *fftPlan) work(out, in []complex128, fstride, stride int, factors []int) {
+func (p *fftPlan) work(out, in []complex64, fstride, stride int, factors []int) {
 	radix, m := factors[0], factors[1]
 	if m == 1 {
 		for i := 0; i < radix; i++ {
@@ -97,15 +97,15 @@ func (p *fftPlan) work(out, in []complex128, fstride, stride int, factors []int)
 
 // fft2 transforms a w by h plane in place, rows and then columns. The
 // inverse is not scaled.
-func fft2(plane []complex128, w, h int, inverse bool) {
+func fft2(plane []complex64, w, h int, inverse bool) {
 	rows, cols := newFFT(w, inverse), newFFT(h, inverse)
-	buf := make([]complex128, max(w, h))
+	buf := make([]complex64, max(w, h))
 	for y := 0; y < h; y++ {
 		row := plane[y*w : (y+1)*w]
 		rows.transform(buf, row, 1)
 		copy(row, buf[:w])
 	}
-	col := make([]complex128, h)
+	col := make([]complex64, h)
 	for x := 0; x < w; x++ {
 		cols.transform(col, plane[x:], w)
 		for y := 0; y < h; y++ {
