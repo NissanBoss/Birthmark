@@ -1,0 +1,154 @@
+package main
+
+// Finding a fingerprint in a photo that is not the size the sensor took
+// it at.
+//
+// Nobody publishes the photo the phone wrote. WhatsApp turns it upright
+// and shrinks it to 1600 across, Facebook to 2048 or 960, Instagram crops
+// it to four by five first. None of that removes the pattern: it turns,
+// shrinks and crops the pattern along with the picture. So the search does
+// to the fingerprint what was done to the photo, which is what anybody
+// looking for you would do, and only then compares.
+
+import "math"
+
+// placement is how a photo sits on the sensor that took it.
+type placement struct {
+	turns int     // quarter turns clockwise from the sensor's own way round
+	scale float64 // the photo's size over the sensor's
+	x, y  int     // where the photo's corner falls on the scaled sensor
+}
+
+type finding struct {
+	pce       float64
+	threshold float64
+	at        placement
+}
+
+func (f finding) linked() bool { return f.pce >= f.threshold }
+
+// linkLine is the PCE above which a photo is the sensor's. The more places
+// a peak may sit, the higher one of them can stand by chance, so a search
+// over crops raises the line by twice the log of the places searched, the
+// size of the largest of that many chance peaks.
+func linkLine(places int) float64 {
+	return 60 + 2*math.Log(float64(max(places, 1)))
+}
+
+// find tests a photo of any size against the fingerprint: every way round,
+// at the scale the photo's size gives, over every crop that scale leaves
+// room for. Every way round, because a crop four by five tall comes out
+// of a photo taken wide as easily as out of one taken tall.
+func (f *fingerprint) find(p *picture) finding {
+	best := finding{pce: math.Inf(-1)}
+	places := 0
+	q, ox, oy := p.centred()
+	signal := weighted(q)
+	for turns := 0; turns < 4; turns++ {
+		kw, kh := f.w, f.h
+		if turns%2 == 1 {
+			kw, kh = f.h, f.w
+		}
+		rw, rh := float64(p.w)/float64(kw), float64(p.h)/float64(kh)
+		scale := max(rw, rh)
+		if math.Abs(rw-rh) < 0.01*scale {
+			scale = (rw + rh) / 2
+		}
+		if scale > 1.02 {
+			continue
+		}
+		sw, sh := max(int(math.Round(float64(kw)*scale)), p.w), max(int(math.Round(float64(kh)*scale)), p.h)
+		k := turned(f.k, f.w, f.h, turns)
+		if sw != kw || sh != kh {
+			k = resized(k, kw, kh, sw, sh)
+		}
+		// Room to slide the photo over the sensor, plus a pixel or two
+		// either way for the rounding of whoever shrank it.
+		const slack = 2
+		// The part of the photo that is compared sits at ox, oy inside it.
+		x0, x1 := ox-slack, ox+sw-p.w+slack
+		y0, y1 := oy-slack, oy+sh-p.h+slack
+		fw, fh := smoothUp(sw+slack), smoothUp(sh+slack)
+		c := correlate(padded(signal, q.w, q.h, fw, fh), padded(k, sw, sh, fw, fh), fw, fh)
+		v, px, py := pce(c, fw, fh, x0, x1, y0, y1)
+		places += (x1 - x0 + 1) * (y1 - y0 + 1)
+		if v > best.pce {
+			best = finding{pce: v, at: placement{turns, scale, px - ox, py - oy}}
+		}
+	}
+	best.threshold = linkLine(places)
+	return best
+}
+
+// turned is a plane given the number of quarter turns clockwise.
+func turned(plane []float32, w, h, turns int) []float32 {
+	for ; turns > 0; turns-- {
+		out := make([]float32, len(plane))
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				out[x*h+(h-1-y)] = plane[y*w+x]
+			}
+		}
+		plane, w, h = out, h, w
+	}
+	return plane
+}
+
+// resized scales a plane to nw by nh, each new pixel the average of the
+// area of old ones it covers, which is close to what an app does when it
+// shrinks a photo, and so to what it does to the pattern in it.
+func resized(plane []float32, w, h, nw, nh int) []float32 {
+	across := make([]float32, nw*h)
+	for y := 0; y < h; y++ {
+		resample(plane[y*w:(y+1)*w], 1, across[y*nw:(y+1)*nw], 1)
+	}
+	out := make([]float32, nw*nh)
+	for x := 0; x < nw; x++ {
+		resample(across[x:], nw, out[x:], nw)
+	}
+	return out
+}
+
+// resample averages a line of n values read every stride places into a
+// line of m values written every ostride places.
+func resample(in []float32, stride int, out []float32, ostride int) {
+	n := (len(in)-1)/stride + 1
+	m := (len(out)-1)/ostride + 1
+	step := float64(n) / float64(m)
+	for i := 0; i < m; i++ {
+		lo, hi := float64(i)*step, float64(i+1)*step
+		var sum, weight float64
+		for j := int(lo); j < n && float64(j) < hi; j++ {
+			part := math.Min(hi, float64(j+1)) - math.Max(lo, float64(j))
+			if part > 0 {
+				sum += part * float64(in[j*stride])
+				weight += part
+			}
+		}
+		if weight > 0 {
+			out[i*ostride] = float32(sum / weight)
+		}
+	}
+}
+
+// padded puts a w by h plane in the corner of a larger one of zeros.
+func padded(plane []float32, w, h, pw, ph int) []float32 {
+	if w == pw && h == ph {
+		return plane
+	}
+	out := make([]float32, pw*ph)
+	for y := 0; y < h; y++ {
+		copy(out[y*pw:y*pw+w], plane[y*w:(y+1)*w])
+	}
+	return out
+}
+
+// smoothUp is the smallest size not under n that the transform is quick
+// on.
+func smoothUp(n int) int {
+	for m := n; ; m++ {
+		if smooth(m) == m {
+			return m
+		}
+	}
+}

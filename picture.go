@@ -142,11 +142,13 @@ func smooth(n int) int {
 }
 
 // centred crops the picture to sizes the transform is quick on, from the
-// middle, where every photo from the same sensor overlaps.
-func (p *picture) centred() *picture {
+// middle, where every photo from the same sensor overlaps, and says where
+// the crop starts.
+func (p *picture) centred() (*picture, int, int) {
 	w, h := smooth(p.w), smooth(p.h)
 	if w == p.w && h == p.h {
-		return p
+		return p, 0, 0
 	}
-	return p.crop((p.w-w)/2, (p.h-h)/2, w, h)
+	x0, y0 := ((p.w-w)/2)&^1, ((p.h-h)/2)&^1
+	return p.crop(x0, y0, w, h), x0, y0
 }

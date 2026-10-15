@@ -208,7 +208,7 @@ func weighted(p *picture) []float32 {
 
 // match is the PCE of a photo of the fingerprint's own size against it.
 func (f *fingerprint) match(p *picture) float64 {
-	v, _, _ := pce(correlate(weighted(p), f.k, f.w, f.h), f.w, f.h, 0, 0)
+	v, _, _ := pce(correlate(weighted(p), f.k, f.w, f.h), f.w, f.h, 0, 0, 0, 0)
 	return v
 }
 
@@ -243,18 +243,20 @@ func spectrum(a []float32, w, h int) []complex128 {
 
 // pce is the peak to correlation energy: the square of the correlation at
 // its peak over the mean square of the correlation away from it, signed
-// like the peak. The peak is looked for at shifts from 0 to sx across and
-// 0 to sy down, which is where a cropped photo can sit inside the frame;
-// "away" leaves out the 11 by 11 square around it, as the reference does.
+// like the peak. The peak is looked for at shifts from x0 to x1 across and
+// y0 to y1 down, negative ones wrapping round, which is where a photo can
+// sit inside the frame; "away" leaves out the 11 by 11 square around it,
+// as the reference does.
 // Above 60 the photo is the sensor's: at that line Goljan, Fridrich and
 // Filler measured about two false alarms in a hundred thousand, on a
 // million photos from Flickr.
-func pce(c []float64, w, h, sx, sy int) (value float64, px, py int) {
+func pce(c []float64, w, h, x0, x1, y0, y1 int) (value float64, px, py int) {
 	best := math.Inf(-1)
-	for dy := 0; dy <= sy && dy < h; dy++ {
-		for dx := 0; dx <= sx && dx < w; dx++ {
-			if v := c[dy*w+dx]; v > best {
-				best, px, py = v, dx, dy
+	for dy := y0; dy <= y1; dy++ {
+		for dx := x0; dx <= x1; dx++ {
+			x, y := (dx%w+w)%w, (dy%h+h)%h
+			if v := c[y*w+x]; v > best {
+				best, px, py = v, x, y
 			}
 		}
 	}
