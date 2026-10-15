@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -50,6 +51,9 @@ func main() {
 	r := &Report{Title: "Birthmark: whether these photos carry your camera's mark"}
 	var built []*camera
 	for _, folder := range cameras {
+		if abs, err := filepath.Abs(folder); err == nil {
+			folder = abs
+		}
 		c, skipped, err := buildCamera(folder, workers)
 		gapsFor(r, skipped, show, "in the camera's folder")
 		if err != nil {
@@ -104,6 +108,9 @@ func gapsFor(r *Report, skipped map[string][]string, show shower, where string) 
 	sort.Strings(kinds)
 	for _, k := range kinds {
 		files := skipped[k]
+		if len(files) == 0 {
+			continue
+		}
 		what := k + " photos, a format this does not read"
 		if k == "unreadable" {
 			what = "files that would not decode"

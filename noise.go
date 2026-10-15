@@ -9,7 +9,10 @@ package main
 // every photo the sensor takes, because each of its pixels turns light
 // into charge a little more or a little less eagerly than the rest.
 
-import "math"
+import (
+	"math"
+	"sync"
+)
 
 const waveletLevels = 4
 
@@ -122,8 +125,14 @@ func shrinkToNoise(band []float64, w, h int, variance float64) {
 // one plane.
 func residual(p *picture, sigma float64) []float32 {
 	var planes [3][]float32
+	var wg sync.WaitGroup
 	for c := range planes {
-		planes[c] = noise(p.planes[c], p.w, p.h, sigma)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			planes[c] = noise(p.planes[c], p.w, p.h, sigma)
+		}()
 	}
+	wg.Wait()
 	return toGray(planes[0], planes[1], planes[2])
 }

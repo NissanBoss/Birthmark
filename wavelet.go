@@ -29,10 +29,20 @@ func split(line, scratch []float64) {
 	half := n / 2
 	for k := 0; k < half; k++ {
 		var a, d float64
-		for t := 0; t < 8; t++ {
-			v := line[(2*k+t)%n]
-			a += daubechies8[t] * v
-			d += mirror[t] * v
+		if i := 2 * k; i+8 <= n {
+			// Away from the end, which is nearly everywhere, no index wraps,
+			// and the remainder that wraps one costs a division for every tap.
+			w := line[i : i+8]
+			for t, v := range w {
+				a += daubechies8[t] * v
+				d += mirror[t] * v
+			}
+		} else {
+			for t := 0; t < 8; t++ {
+				v := line[(i+t)%n]
+				a += daubechies8[t] * v
+				d += mirror[t] * v
+			}
 		}
 		scratch[k], scratch[half+k] = a, d
 	}
@@ -47,6 +57,13 @@ func join(line, scratch []float64) {
 	clear(scratch[:n])
 	for k := 0; k < half; k++ {
 		a, d := line[k], line[half+k]
+		if i := 2 * k; i+8 <= n {
+			w := scratch[i : i+8]
+			for t := range w {
+				w[t] += daubechies8[t]*a + mirror[t]*d
+			}
+			continue
+		}
 		for t := 0; t < 8; t++ {
 			scratch[(2*k+t)%n] += daubechies8[t]*a + mirror[t]*d
 		}

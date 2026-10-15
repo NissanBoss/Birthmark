@@ -89,7 +89,9 @@ func buildCamera(folder string, workers int) (*camera, map[string][]string, erro
 	if total == nil || total.photos < 2 {
 		return nil, skipped, fmt.Errorf("%s has fewer than two readable photos of one size", folder)
 	}
-	skipped["unreadable"] = append(skipped["unreadable"], bad...)
+	if len(bad) > 0 {
+		skipped["unreadable"] = append(skipped["unreadable"], bad...)
+	}
 	return &camera{name: folder, print: total.fingerprint(), others: len(files) - len(use)}, skipped, nil
 }
 
