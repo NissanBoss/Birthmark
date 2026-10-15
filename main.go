@@ -166,11 +166,7 @@ func placed(v verdict) string {
 	if s := v.found.at.scale; s < 0.98 {
 		parts = append(parts, fmt.Sprintf("shrunk to %d%%", int(math.Round(s*100))))
 	}
-	kw, kh := v.by.print.w, v.by.print.h
-	if v.found.at.turns%2 == 1 {
-		kw, kh = kh, kw
-	}
-	if float64(v.w) < float64(kw)*v.found.at.scale-4 || float64(v.h) < float64(kh)*v.found.at.scale-4 {
+	if v.found.at.cropped {
 		parts = append(parts, "cropped")
 	}
 	if len(parts) == 0 {

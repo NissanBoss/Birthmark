@@ -14,9 +14,9 @@ import "math"
 
 // placement is how a photo sits on the sensor that took it.
 type placement struct {
-	turns int     // quarter turns clockwise from the sensor's own way round
-	scale float64 // the photo's size over the sensor's
-	x, y  int     // where the photo's corner falls on the scaled sensor
+	turns   int     // quarter turns clockwise from the sensor's own way round
+	scale   float64 // the photo's size over the sensor's
+	cropped bool    // smaller than the scaled sensor, so cut from it
 }
 
 type finding struct {
@@ -44,13 +44,14 @@ func (f *fingerprint) find(p *evidence) finding {
 	places := 0
 	// Ways round that need the same frame share the photo's transform.
 	spectra := map[[2]int][]complex64{}
-	q, ox, oy, signal := p.part, p.ox, p.oy, p.signal
+	q, signal := p.part, p.signal
 	for turns := 0; turns < 4; turns++ {
-		kw, kh := f.w, f.h
-		if turns%2 == 1 {
-			kw, kh = f.h, f.w
-		}
-		rw, rh := float64(p.w)/float64(kw), float64(p.h)/float64(kh)
+		// The scale comes from the whole sensor, not from the part of it
+		// the pattern covers: measured against the part, a photo the very
+		// size the camera wrote came out 0.7 per cent too big, and an
+		// iPhone was found in none of its own photos.
+		sensorW, sensorH, rx, ry, kw, kh := f.region(turns)
+		rw, rh := float64(p.w)/float64(sensorW), float64(p.h)/float64(sensorH)
 		scale := max(rw, rh)
 		if math.Abs(rw-rh) < 0.01*scale {
 			scale = (rw + rh) / 2
@@ -58,31 +59,52 @@ func (f *fingerprint) find(p *evidence) finding {
 		if scale > 1.02 {
 			continue
 		}
-		sw, sh := max(int(math.Round(float64(kw)*scale)), p.w), max(int(math.Round(float64(kh)*scale)), p.h)
 		k := turned(f.k, f.w, f.h, turns)
-		if sw != kw || sh != kh {
+		sw, sh := kw, kh
+		if math.Abs(scale-1) > 0.002 {
+			sw, sh = int(math.Round(float64(kw)*scale)), int(math.Round(float64(kh)*scale))
 			k = resized(k, kw, kh, sw, sh)
 		}
-		// Room to slide the photo over the sensor, plus a pixel or two
-		// either way for the rounding of whoever shrank it.
+		fullW, fullH := max(int(math.Round(float64(sensorW)*scale)), p.w), max(int(math.Round(float64(sensorH)*scale)), p.h)
+		// The photo's corner may sit anywhere its crop leaves room for on
+		// the scaled sensor. The part of it compared starts at p.ox, p.oy
+		// inside it, and the pattern at rx, ry on the sensor, so the shift
+		// that lines the two up is the corner plus the one less the other.
+		// A pixel or two of slack either way covers the rounding of
+		// whoever shrank the photo.
 		const slack = 2
-		// The part of the photo that is compared sits at ox, oy inside it.
-		x0, x1 := ox-slack, ox+sw-p.w+slack
-		y0, y1 := oy-slack, oy+sh-p.h+slack
-		fw, fh := smoothUp(sw+slack), smoothUp(sh+slack)
+		bx, by := p.ox-int(math.Round(float64(rx)*scale)), p.oy-int(math.Round(float64(ry)*scale))
+		x0, x1 := bx-slack, bx+fullW-p.w+slack
+		y0, y1 := by-slack, by+fullH-p.h+slack
+		// Wide enough that no shift searched wraps the photo onto itself.
+		fw := smoothUp(max(sw, q.w+max(x1, 0)) + max(-x0, 0) + 1)
+		fh := smoothUp(max(sh, q.h+max(y1, 0)) + max(-y0, 0) + 1)
 		frame := [2]int{fw, fh}
 		if spectra[frame] == nil {
 			spectra[frame] = spectrum(padded(signal, q.w, q.h, fw, fh), fw, fh)
 		}
 		c := crossSpectra(spectra[frame], spectrum(padded(k, sw, sh, fw, fh), fw, fh), fw, fh)
-		v, px, py := pce(c, fw, fh, x0, x1, y0, y1)
+		v, _, _ := pce(c, fw, fh, x0, x1, y0, y1)
 		places += (x1 - x0 + 1) * (y1 - y0 + 1)
 		if v > best.pce {
-			best = finding{pce: v, at: placement{turns, scale, px - ox, py - oy}}
+			best = finding{pce: v, at: placement{turns: turns, scale: scale, cropped: p.w < fullW-4 || p.h < fullH-4}}
 		}
 	}
 	best.threshold = linkLine(places)
 	return best
+}
+
+// region is where the pattern sits on the sensor turned a number of
+// quarter turns clockwise: the sensor's size that way round, and the
+// corner and size of the part the pattern covers.
+func (f *fingerprint) region(turns int) (sensorW, sensorH, x, y, w, h int) {
+	sensorW, sensorH, x, y, w, h = f.sensorW, f.sensorH, f.ox, f.oy, f.w, f.h
+	for ; turns > 0; turns-- {
+		// A quarter turn clockwise takes x, y to sensorH-1-y, x.
+		x, y = sensorH-(y+h), x
+		sensorW, sensorH, w, h = sensorH, sensorW, h, w
+	}
+	return
 }
 
 // evidence is a photo made ready to be compared with fingerprints: the

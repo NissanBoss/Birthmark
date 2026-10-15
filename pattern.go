@@ -12,6 +12,11 @@ type fingerprint struct {
 	w, h   int
 	k      []float32
 	photos int
+	// The pattern covers the middle of the sensor, cut to a size the
+	// transform is quick on: the whole sensor is sensorW by sensorH, the
+	// size the camera writes, and the part starts at ox, oy.
+	sensorW, sensorH int
+	ox, oy           int
 }
 
 // estimator adds photos up into a fingerprint. Each one adds its noise
@@ -19,14 +24,17 @@ type fingerprint struct {
 // cent more eager is two per cent brighter, so the pattern shows where
 // the photo is bright and is not there at all where it is black.
 type estimator struct {
-	w, h   int
-	sum    [3][]float32
-	weight [3][]float32
-	photos int
+	w, h int
+	// The size the camera writes, which the pattern is the middle of.
+	sensorW, sensorH int
+	sum              [3][]float32
+	weight           [3][]float32
+	photos           int
 }
 
-func newEstimator(w, h int) *estimator {
-	e := &estimator{w: w, h: h}
+func newEstimator(sensorW, sensorH int) *estimator {
+	w, h := smooth(sensorW), smooth(sensorH)
+	e := &estimator{w: w, h: h, sensorW: sensorW, sensorH: sensorH}
 	for c := 0; c < 3; c++ {
 		e.sum[c] = make([]float32, w*h)
 		e.weight[c] = make([]float32, w*h)
@@ -34,7 +42,9 @@ func newEstimator(w, h int) *estimator {
 	return e
 }
 
-func (e *estimator) add(p *picture) {
+// add takes a photo the size the camera writes and adds the middle of it.
+func (e *estimator) add(photo *picture) {
+	p, _, _ := photo.centred()
 	for c := range p.planes {
 		n := noise(p.planes[c], p.w, p.h, 3)
 		lit := light(p.planes[c], p.w, p.h)
@@ -67,7 +77,9 @@ func (e *estimator) fingerprint() *fingerprint {
 	}
 	k := toGray(planes[0], planes[1], planes[2])
 	zeroMean(k, e.w, e.h)
-	return &fingerprint{w: e.w, h: e.h, k: wienerDFT(k, e.w, e.h, stddev(k)), photos: e.photos}
+	ox, oy := ((e.sensorW-e.w)/2)&^1, ((e.sensorH-e.h)/2)&^1
+	return &fingerprint{w: e.w, h: e.h, k: wienerDFT(k, e.w, e.h, stddev(k)), photos: e.photos,
+		sensorW: e.sensorW, sensorH: e.sensorH, ox: ox, oy: oy}
 }
 
 // light is how strongly the pattern can show in each pixel: the
@@ -216,8 +228,10 @@ func weighted(p *picture) []float32 {
 	return w
 }
 
-// match is the PCE of a photo of the fingerprint's own size against it.
-func (f *fingerprint) match(p *picture) float64 {
+// match is the PCE of a photo the size the camera writes against the
+// fingerprint, lined up as taken.
+func (f *fingerprint) match(photo *picture) float64 {
+	p, _, _ := photo.centred()
 	v, _, _ := pce(correlate(weighted(p), f.k, f.w, f.h), f.w, f.h, 0, 0, 0, 0)
 	return v
 }

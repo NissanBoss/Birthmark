@@ -132,9 +132,8 @@ func fingerprintOf(folder string) (*fingerprint, int, error) {
 		if err != nil {
 			continue
 		}
-		q, _, _ := p.centred()
-		key := [2]int{q.w, q.h}
-		sizes[key] = append(sizes[key], q)
+		key := [2]int{p.w, p.h}
+		sizes[key] = append(sizes[key], p)
 		if len(sizes[key]) > len(sizes[best]) {
 			best = key
 		}

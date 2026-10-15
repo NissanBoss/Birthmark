@@ -21,7 +21,9 @@ for device in "$@"; do
 	done
 done | sed 's/\r$//' > "$dir/wanted.txt"
 cd "$dir"
-# One folder per phone and kind, the way the dataset lays them out.
+# One folder per phone and kind, the way the dataset lays them out. Each
+# file arrives under another name and is renamed once it is whole, so a
+# dropped connection leaves nothing that looks like a photo.
 sed 's|.*/dataset/||' wanted.txt | while read -r path; do
 	[ -s "$path" ] || printf '%s\n' "$path"
-done | xargs -P 8 -I{} sh -c 'mkdir -p "$(dirname "{}")" && curl -sSf "https://lesc.dinfo.unifi.it/VISION/dataset/{}" -o "{}"'
+done | xargs -P 8 -I{} sh -c 'mkdir -p "$(dirname "{}")" && curl -sSf --retry 3 "https://lesc.dinfo.unifi.it/VISION/dataset/{}" -o "{}.part" && mv "{}.part" "{}"'

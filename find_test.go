@@ -66,3 +66,27 @@ func TestTheSensorIsFoundAfterTheAppsHaveHadThePhoto(t *testing.T) {
 		}
 	}
 }
+
+// A sensor whose size the transform is slow on, the way 3264 by 2448 is:
+// the pattern covers the middle of it, and a photo of the whole sensor
+// still has to line up with it. Measured against the middle, the first
+// version took such photos for 0.7 per cent too big and found an iPhone
+// in none of its own.
+func TestASensorOfAnAwkwardSize(t *testing.T) {
+	w, h := 266, 202
+	gains := fakeSensor(30, w, h)
+	rng := rand.New(rand.NewSource(31))
+	e := newEstimator(w, h)
+	for i := 0; i < 16; i++ {
+		e.add(fakePhoto(rng, gains, w, h, 92))
+	}
+	k := e.fingerprint()
+	if k.w == w && k.h == h {
+		t.Fatalf("%dx%d needed no cropping, so this tests nothing", w, h)
+	}
+	for _, p := range []*picture{fakePhoto(rng, gains, w, h, 90), shared(fakePhoto(rng, gains, w, h, 92), 200, 152, 85)} {
+		if v := k.find(prepare(p)); !v.linked() {
+			t.Errorf("a %dx%d photo from the sensor scored %.1f, under the line at %.1f", p.w, p.h, v.pce, v.threshold)
+		}
+	}
+}

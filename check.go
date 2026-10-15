@@ -49,7 +49,6 @@ func buildCamera(folder string, workers int) (*camera, map[string][]string, erro
 	if len(use) < 2 {
 		return nil, skipped, fmt.Errorf("%s has fewer than two photos of one size to make a fingerprint from", folder)
 	}
-	w, h := smooth(common[0]), smooth(common[1])
 	// One estimator a worker, added together at the end: the sums are all
 	// the fingerprint is, so the order photos arrive in does not matter.
 	parts := make([]*estimator, min(workers, len(use)))
@@ -58,7 +57,7 @@ func buildCamera(folder string, workers int) (*camera, map[string][]string, erro
 	var wg sync.WaitGroup
 	next := make(chan string)
 	for i := range parts {
-		parts[i] = newEstimator(w, h)
+		parts[i] = newEstimator(common[0], common[1])
 		wg.Add(1)
 		go func(e *estimator) {
 			defer wg.Done()
@@ -70,8 +69,7 @@ func buildCamera(folder string, workers int) (*camera, map[string][]string, erro
 					mu.Unlock()
 					continue
 				}
-				q, _, _ := p.centred()
-				e.add(q)
+				e.add(p)
 			}
 		}(parts[i])
 	}
