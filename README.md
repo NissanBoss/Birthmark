@@ -214,8 +214,9 @@ the main one.
 
 **On some phones the match is with the model, not the phone.** Recent
 phones process every photo heavily, and some models leave patterns of
-their own processing that every phone of that model shares. Iuliani and
-others found this in most Samsung and Huawei models they tested, in 2021.
+their own processing that every phone of that model shares. Iuliani,
+Fontani and Piva found it across most of the brands they tested, Samsung
+and Huawei among them, in 2021.
 Birthmark has no other phone of your model to compare with, so it cannot
 tell which it found; a match with your model is a leak either way, only a
 smaller one. Among VISION's phones from 2016, which come in twos and threes
