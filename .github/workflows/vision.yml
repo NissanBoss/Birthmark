@@ -1,0 +1,70 @@
+name: Vision
+
+# The method against real phones. VISION is the University of Florence's
+# set of photos from thirty five phones, each also as WhatsApp and Facebook
+# gave it back (Shullani, Fontani, Iuliani, Al Shaya and Piva, 2017). It is
+# downloaded here and never kept in this repository: it is CC BY-SA, and
+# three gigabytes of it are used.
+#
+# This runs here and not on anybody's own computer. It compares nineteen
+# phones' photos with every phone's fingerprint, which takes an hour or two
+# of every processor a machine has and several gigabytes of memory, and the
+# first time it ran on a desktop, it took the desktop down. It runs every
+# Sunday as well, so a change that makes the method worse on real phones
+# shows up the week it is made.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 3 * * 0"
+
+jobs:
+  vision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      # The pairs of phones of one model are what say whether a match is
+      # with the phone or only with its model: two iPhone 4s, three iPhone
+      # 5c, two iPhone 5, two iPhone 6, two Galaxy S3 Mini and the OnePlus 3
+      # and 3T.
+      - name: Download part of VISION
+        run: sh testdata/vision/fetch.sh "$RUNNER_TEMP/vision" 30 20 D01 D26 D02 D10 D05 D14 D18 D06 D15 D29 D34 D25 D32 D03 D11 D12 D24 D27 D28
+
+      - name: Every phone's photos against every phone's fingerprint
+        env:
+          BIRTHMARK_VISION: ${{ runner.temp }}/vision
+          BIRTHMARK_WORKERS: "2"
+        run: go test -count=1 -run TestVision -v -timeout 300m .
+
+      # The report in the README comes from here: an iPhone 4s's own photos
+      # as the camera, three of its photos as taken, through WhatsApp and
+      # through Facebook, and one from another phone.
+      - name: The example in the README
+        if: always()
+        run: |
+          go build -o "$RUNNER_TEMP/birthmark" .
+          v="$RUNNER_TEMP/vision" e="$RUNNER_TEMP/example"
+          mkdir -p "$e/camera" "$e/to-post"
+          cp "$v"/D02_*/images/flat/*.jpg "$e/camera/"
+          cp "$v"/D02_*/images/nat/D02_I_nat_0003.jpg "$e/to-post/IMG_0412.jpg"
+          cp "$v"/D02_*/images/natWA/D02_I_natWA_0007.jpg "$e/to-post/IMG-20161104-WA0003.jpg"
+          cp "$v"/D02_*/images/natFBH/D02_I_natFBH_0011.jpg "$e/to-post/facebook_1478.jpg"
+          cp "$v"/D01_*/images/nat/D01_I_nat_0005.jpg "$e/to-post/from_a_friend.jpg"
+          cd "$e"
+          HOME="$e" "$RUNNER_TEMP/birthmark" --camera camera to-post > example.txt || true
+          cat example.txt
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: vision
+          path: |
+            ${{ runner.temp }}/vision/results.txt
+            ${{ runner.temp }}/vision/results.csv
+            ${{ runner.temp }}/example/example.txt

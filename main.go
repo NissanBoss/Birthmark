@@ -10,7 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 )
@@ -46,7 +46,13 @@ func main() {
 	}
 	home, _ := os.UserHomeDir()
 	show := shower{home: home, reveal: *reveal}
-	workers := max(1, min(4, runtime.NumCPU()/2))
+	// One photo at a time, its three colours side by side, and a ceiling
+	// the garbage collector works to stay under. A photo of twelve
+	// megapixels needs most of a gigabyte while it is compared, and five of
+	// them at once, the way the calibration first ran, took a machine with
+	// sixteen gigabytes down with them.
+	debug.SetMemoryLimit(2 << 30)
+	const workers = 1
 
 	r := &Report{Title: "Birthmark: whether these photos carry your camera's mark"}
 	var built []*camera
@@ -61,7 +67,7 @@ func main() {
 			os.Exit(exitBroken)
 		}
 		built = append(built, c)
-		line := fmt.Sprintf("The fingerprint of %s comes from %s at %dx%d.", show.path(c.name), plural(c.print.photos, "photo", "photos"), c.print.w, c.print.h)
+		line := fmt.Sprintf("The fingerprint of %s comes from %s at %dx%d.", show.path(c.name), plural(c.print.photos, "photo", "photos"), c.print.sensorW, c.print.sensorH)
 		if c.others > 0 {
 			line += fmt.Sprintf(" %s of another size were left out.", plural(c.others, "photo", "photos"))
 		}
@@ -135,17 +141,34 @@ func writeUp(r *Report, verdicts []verdict, cameras []*camera, show shower) []ve
 		}
 	}
 	sort.SliceStable(linked, func(i, j int) bool { return linked[i].found.pce > linked[j].found.pce })
+	// The paths in one column, unless one is so long that the column would
+	// push the scores off the screen.
+	width := 0
+	for _, v := range verdicts {
+		if n := runes(show.path(v.path)); n <= 44 {
+			width = max(width, n)
+		}
+	}
 	if len(linked) > 0 {
 		var lines []string
 		for _, v := range linked {
-			line := fmt.Sprintf("%s  PCE %s, %s", show.path(v.path), commas(int(math.Round(v.found.pce))), placed(v))
+			line := fmt.Sprintf("%-*s  PCE %s, %s", width, show.path(v.path), commas(int(math.Round(v.found.pce))), placed(v))
 			if len(cameras) > 1 {
 				line += ", camera " + show.path(v.by.name)
 			}
 			lines = append(lines, line)
 		}
+		title := fmt.Sprintf("%d of the %s carry the mark of your camera", len(linked), plural(len(verdicts), "photo", "photos"))
+		switch {
+		case len(verdicts) == 1:
+			title = "The photo carries the mark of your camera"
+		case len(linked) == len(verdicts):
+			title = fmt.Sprintf("All %d photos carry the mark of your camera", len(linked))
+		case len(linked) == 1:
+			title = fmt.Sprintf("1 of the %d photos carries the mark of your camera", len(verdicts))
+		}
 		r.add(Finding{Tag: "LINKED  ", Weight: Links,
-			Title:  fmt.Sprintf("%d of the %s carry the mark of your camera", len(linked), plural(len(verdicts), "photo", "photos")),
+			Title:  title,
 			Lines:  lines,
 			Advice: "Anybody with a few photos from the same camera can find this, whatever was taken out of the file's metadata. The PCE is how far above chance the match stands; past the line, about 60 to 80 depending on how much searching it took, it is not chance.",
 		})
@@ -153,7 +176,7 @@ func writeUp(r *Report, verdicts []verdict, cameras []*camera, show shower) []ve
 	if len(clear) > 0 {
 		var lines []string
 		for _, v := range clear {
-			lines = append(lines, fmt.Sprintf("%s  PCE %s", show.path(v.path), commas(int(math.Round(v.found.pce)))))
+			lines = append(lines, fmt.Sprintf("%-*s  PCE %s", width, show.path(v.path), commas(int(math.Round(v.found.pce)))))
 		}
 		r.add(Finding{Tag: "CLEAR   ", Weight: Note,
 			Title:  fmt.Sprintf("%s no mark of your camera", plural(len(clear), "photo shows", "photos show")),
@@ -190,26 +213,30 @@ func breaks(r *Report, linked []verdict, workers int) {
 	var lines []string
 	gone := 0
 	for _, g := range rungs {
-		what := fmt.Sprintf("shrunk to %d on the long side: ", g.side)
+		what := fmt.Sprintf("%5d on the long side: ", g.side)
 		switch {
+		case g.linked == 0 && g.tried == 1:
+			what += fmt.Sprintf("the mark is gone, PCE %s", commas(int(math.Round(g.highest))))
 		case g.linked == 0:
-			what += fmt.Sprintf("no mark left in any of them, the highest PCE %s", commas(int(math.Round(g.highest))))
-			if gone == 0 {
-				gone = g.side
-			}
+			what += fmt.Sprintf("the mark is gone from all of them, the highest PCE %s", commas(int(math.Round(g.highest))))
+		case g.tried == 1:
+			what += "it still carries it"
 		case g.linked == g.tried:
 			what += fmt.Sprintf("all %d still carry it", g.tried)
 		default:
 			what += fmt.Sprintf("%d of %d still carry it", g.linked, g.tried)
 		}
+		if g.linked == 0 && gone == 0 {
+			gone = g.side
+		}
 		lines = append(lines, what)
 	}
-	advice := "None of these sizes took the mark out of every photo."
+	advice := fmt.Sprintf("Each copy was shrunk and saved as JPEG at quality %d, the way apps save what they shrink. None of these sizes took the mark out of every photo.", shrinkQuality)
 	if gone > 0 {
-		advice = fmt.Sprintf("Here the mark went at %d on the long side. Somebody with more of your photos than this program was given finds a fainter mark, so leave room below that, and know that cropping does not help at all: the mark is in every part of the photo.", gone)
+		advice = fmt.Sprintf("Each copy was shrunk and saved as JPEG at quality %d, the way apps save what they shrink. Here the mark went at %d on the long side. Somebody with more of your photos than this program was given finds a fainter mark, so leave room below that. Cropping does not help at all: the mark is in every part of the photo.", shrinkQuality, gone)
 	}
 	r.add(Finding{Tag: "BREAKS  ", Weight: Says,
-		Title:  fmt.Sprintf("What took the mark out, tried on copies in memory saved at JPEG quality %d", shrinkQuality),
+		Title:  "What would take the mark out, tried on copies in memory",
 		Lines:  lines,
 		Advice: advice,
 	})

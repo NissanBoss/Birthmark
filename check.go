@@ -172,6 +172,12 @@ func whatBreaks(linked []verdict, workers int) []rung {
 		long := max(v.w, v.h)
 		side := shrinkSides[r]
 		if side >= long {
+			// Already no bigger than this, and already found as it is.
+			mu.Lock()
+			defer mu.Unlock()
+			rungs[r].tried++
+			rungs[r].linked++
+			rungs[r].least = min(rungs[r].least, v.found.pce)
 			return
 		}
 		p, err := load(v.path)

@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -54,7 +54,12 @@ func TestVision(t *testing.T) {
 	if len(phones) < 2 {
 		t.Fatalf("fewer than two phones under %s", dir)
 	}
-	workers := max(1, min(5, runtime.NumCPU()/2))
+	// One at a time unless told otherwise: five at once took a machine with
+	// sixteen gigabytes down. The workflow that runs this gives it two.
+	workers := 1
+	if n, err := strconv.Atoi(os.Getenv("BIRTHMARK_WORKERS")); err == nil && n > 0 {
+		workers = n
+	}
 
 	prints := map[string]*fingerprint{}
 	var mu sync.Mutex
@@ -70,7 +75,9 @@ func TestVision(t *testing.T) {
 		t.Logf("%s: fingerprint from %d photos, %dx%d", filepath.Base(phones[i]), n, k.w, k.h)
 	})
 
-	const crossPerKind = 5
+	// Originals are twelve megapixels and slow to compare, so fewer of them
+	// meet every other phone.
+	crossPerKind := map[string]int{"nat": 2, "natWA": 5, "natFBH": 5, "natFBL": 5}
 	type job struct {
 		phone, kind, file string
 		cross             bool
@@ -81,16 +88,22 @@ func TestVision(t *testing.T) {
 			files, _ := filepath.Glob(filepath.Join(p, "images", kind, "*.jpg"))
 			sort.Strings(files)
 			for i, f := range files {
-				jobs = append(jobs, job{filepath.Base(p), kind, f, i < crossPerKind})
+				jobs = append(jobs, job{filepath.Base(p), kind, f, i < crossPerKind[kind]})
 			}
 		}
 	}
 	var results []visionResult
+	unread := 0
 	run(workers, len(jobs), func(i int) {
 		j := jobs[i]
 		pic, err := load(j.file)
 		if err != nil {
-			t.Errorf("%s: %v", j.file, err)
+			// A photo Go cannot decode is said and counted, not a failure of
+			// the method: the results say how many there were.
+			t.Logf("%s: %v", j.file, err)
+			mu.Lock()
+			unread++
+			mu.Unlock()
 			return
 		}
 		ev := prepare(pic)
@@ -108,6 +121,9 @@ func TestVision(t *testing.T) {
 	})
 
 	report := summarise(results)
+	if unread > 0 {
+		report += fmt.Sprintf("\n%d photos could not be decoded and are not in these numbers\n", unread)
+	}
 	t.Log("\n" + report)
 	if err := os.WriteFile(filepath.Join(dir, "results.txt"), []byte(report), 0o644); err != nil {
 		t.Log(err)
