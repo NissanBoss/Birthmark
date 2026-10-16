@@ -4,11 +4,11 @@ package main
 // it at.
 //
 // Nobody publishes the photo the phone wrote. WhatsApp turns it upright
-// and shrinks it to 1600 across, Facebook to 2048 or 960, Instagram crops
-// it to four by five first. None of that removes the pattern: it turns,
-// shrinks and crops the pattern along with the picture. So the search does
-// to the fingerprint what was done to the photo, which is what anybody
-// looking for you would do, and only then compares.
+// and shrinks it, Facebook shrinks it, Instagram crops a tall one to four
+// by five first. None of that removes the pattern: it turns, shrinks and
+// crops the pattern along with the picture. So the search does to the
+// fingerprint what was done to the photo, which is what anybody looking
+// for you would do, and only then compares.
 
 import "math"
 
