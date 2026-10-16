@@ -224,7 +224,11 @@ func breaks(r *Report, linked []verdict, workers int) {
 		case g.linked == g.tried:
 			what += fmt.Sprintf("all %d still carry it", g.tried)
 		default:
-			what += fmt.Sprintf("%d of %d still carry it", g.linked, g.tried)
+			if g.linked == 1 {
+				what += fmt.Sprintf("1 of %d still carries it", g.tried)
+			} else {
+				what += fmt.Sprintf("%d of %d still carry it", g.linked, g.tried)
+			}
 		}
 		if g.linked == 0 && gone == 0 {
 			gone = g.side

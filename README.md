@@ -5,7 +5,27 @@ pattern its sensor leaves in every photo it takes, which no metadata tool
 touches, and which links a photo to the phone that took it.
 
 ```
-EXAMPLE
+  Birthmark: whether these photos carry your camera's mark
+  ========================================================
+
+  The fingerprint of ~/camera comes from 30 photos at 3264x2448.
+  Looked for it in 4 photos.
+
+    [LINKED  ] 3 of the 4 photos carry the mark of your camera
+              ~/to-post/IMG_0412.jpg             PCE 49,958, as the camera took it
+              ~/to-post/facebook_1478.jpg        PCE 923, turned, shrunk to 63%
+              ~/to-post/IMG-20161104-WA0003.jpg  PCE 598, turned, shrunk to 39%
+
+    [BREAKS  ] What would take the mark out, tried on copies in memory
+               2048 on the long side: all 3 still carry it
+               1600 on the long side: all 3 still carry it
+               1280 on the long side: all 3 still carry it
+               1080 on the long side: all 3 still carry it
+                800 on the long side: 1 of 3 still carries it
+                640 on the long side: the mark is gone from all of them, the highest PCE 19
+
+    [CLEAR   ] 1 photo shows no mark of your camera
+              ~/to-post/from_a_friend.jpg        PCE 5
 ```
 
 That is a real run, on real photos. The camera is an iPhone 4s from VISION,
@@ -112,7 +132,41 @@ else.
 
 ## The calibration
 
-CALIBRATION
+Every number here comes from real phones. VISION is the University of
+Florence's set of photos from thirty five phones, each also as WhatsApp
+and Facebook gave it back (Shullani and others, 2017), and
+`.github/workflows/vision.yml` downloads part of it and runs the whole
+comparison again every Sunday. Nineteen of the phones are used, chosen so
+that phones of one model come in twos and threes: two iPhone 4s, three
+iPhone 5c, two iPhone 5, two iPhone 6 and two Galaxy S3 Mini, with the
+OnePlus 3 and 3T beside them. Each phone's fingerprint comes from thirty of
+its photos of the sky and of walls. Twenty ordinary photos of every phone
+are then looked for under it, as the camera wrote them and as the apps gave
+them back, and the first few of each kind under every other phone as well.
+
+| The photo | Found under its own phone | Taken for its twin of the same model | Taken for any other phone |
+|---|---|---|---|
+| As the camera wrote it | 362 of 379, 95.5% | 0 of 28 | 0 of 656 |
+| After WhatsApp | 327 of 380, 86.1% | 0 of 42 | 0 of 984 |
+| After Facebook, high quality | 341 of 380, 89.7% | 0 of 42 | 0 of 984 |
+| After Facebook, low quality | 151 of 380, 39.7% | 0 of 42 | 0 of 984 |
+
+Not one photo was taken for a phone that did not take it, of its own model
+or of any other. The highest score a photo reached under the wrong phone
+was 30, against a line of 66 or more.
+
+What gets missed is a few phones and the smallest copies. The OnePlus 3
+and 3T miss a quarter to a third of their own originals; some phones lose
+the mark in WhatsApp's and Facebook's copies more often than others, the
+Huawei P8 and the Galaxy S5 most of all, with about two in three found;
+and Facebook's low quality copies, the smallest of all, keep it in four
+photos out of ten. That is the same thing the report's sizes say: shrink a
+photo far enough and the mark goes with the detail.
+
+These are phones from 2016. Newer ones process every photo more, and that
+is where the literature finds phones of one model starting to look alike;
+nothing here measures that yet. Of the 2,090 photos, one could not be
+decoded and is not in these numbers.
 
 ## Running it
 
@@ -164,7 +218,9 @@ their own processing that every phone of that model shares. Iuliani and
 others found this in most Samsung and Huawei models they tested, in 2021.
 Birthmark has no other phone of your model to compare with, so it cannot
 tell which it found; a match with your model is a leak either way, only a
-smaller one. What the calibration found for phones of one model is above.
+smaller one. Among VISION's phones from 2016, which come in twos and threes
+of one model, not one photo was taken for its twin; newer phones are not
+measured yet.
 
 **Not finding the mark is not proof it is not there.** The search tries
 the scales and crops a photo's own size suggests. A photo cropped and then
