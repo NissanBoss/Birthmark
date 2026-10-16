@@ -63,21 +63,26 @@ func TestVision(t *testing.T) {
 
 	prints := map[string]*fingerprint{}
 	var mu sync.Mutex
+	// The fingerprints are built the way the program builds one, a photo at
+	// a time into running sums. The first version of this test read every
+	// photo of a phone into memory before adding any of them up, three
+	// gigabytes a phone, and took down a desktop and then one of GitHub's
+	// machines.
 	run(workers, len(phones), func(i int) {
-		k, n, err := fingerprintOf(filepath.Join(phones[i], "images", "flat"))
+		c, _, err := buildCamera(filepath.Join(phones[i], "images", "flat"), 1)
 		if err != nil {
 			t.Errorf("%s: %v", phones[i], err)
 			return
 		}
 		mu.Lock()
-		prints[filepath.Base(phones[i])] = k
+		prints[filepath.Base(phones[i])] = c.print
 		mu.Unlock()
-		t.Logf("%s: fingerprint from %d photos, %dx%d", filepath.Base(phones[i]), n, k.w, k.h)
+		t.Logf("%s: fingerprint from %d photos, %dx%d", filepath.Base(phones[i]), c.print.photos, c.print.sensorW, c.print.sensorH)
 	})
 
 	// Originals are twelve megapixels and slow to compare, so fewer of them
 	// meet every other phone.
-	crossPerKind := map[string]int{"nat": 2, "natWA": 5, "natFBH": 5, "natFBL": 5}
+	crossPerKind := map[string]int{"nat": 2, "natWA": 3, "natFBH": 3, "natFBL": 3}
 	type job struct {
 		phone, kind, file string
 		cross             bool
@@ -134,34 +139,6 @@ func TestVision(t *testing.T) {
 		fmt.Fprintf(&csv, "%s,%s,%s,%s,%.2f,%.2f\n", r.phone, r.kind, r.against, r.file, r.pce, r.threshold)
 	}
 	os.WriteFile(filepath.Join(dir, "results.csv"), []byte(csv.String()), 0o644)
-}
-
-// fingerprintOf builds a fingerprint from the photos in a folder that
-// share the most common size.
-func fingerprintOf(folder string) (*fingerprint, int, error) {
-	files, _ := filepath.Glob(filepath.Join(folder, "*.jpg"))
-	sort.Strings(files)
-	sizes := map[[2]int][]*picture{}
-	var best [2]int
-	for _, f := range files {
-		p, err := load(f)
-		if err != nil {
-			continue
-		}
-		key := [2]int{p.w, p.h}
-		sizes[key] = append(sizes[key], p)
-		if len(sizes[key]) > len(sizes[best]) {
-			best = key
-		}
-	}
-	if len(sizes[best]) == 0 {
-		return nil, 0, fmt.Errorf("no photos in %s", folder)
-	}
-	e := newEstimator(best[0], best[1])
-	for _, p := range sizes[best] {
-		e.add(p)
-	}
-	return e.fingerprint(), e.photos, nil
 }
 
 // model is a phone's name without its number in the set.

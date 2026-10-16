@@ -36,10 +36,14 @@ jobs:
       - name: Download part of VISION
         run: sh testdata/vision/fetch.sh "$RUNNER_TEMP/vision" 30 20 D01 D26 D02 D10 D05 D14 D18 D06 D15 D29 D34 D25 D32 D03 D11 D12 D24 D27 D28
 
+      # One photo at a time, and a ceiling for the garbage collector: the
+      # machine has two processors and seven gigabytes, and a photo of twelve
+      # megapixels needs most of a gigabyte and a half while it is compared.
       - name: Every phone's photos against every phone's fingerprint
         env:
           BIRTHMARK_VISION: ${{ runner.temp }}/vision
-          BIRTHMARK_WORKERS: "2"
+          BIRTHMARK_WORKERS: "1"
+          GOMEMLIMIT: 5GiB
         run: go test -count=1 -run TestVision -v -timeout 300m .
 
       # The report in the README comes from here: an iPhone 4s's own photos
